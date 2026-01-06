@@ -53,7 +53,9 @@ jobs:
       
       - name: Build APK
         run: |
-          flutter build apk --release
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          flutter build apk --${BUILD_TYPE}
+          echo "Built APK with build type: ${BUILD_TYPE}"
       
       - name: Get APK info
         run: |
@@ -63,8 +65,8 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: app-${{ github.event.inputs.build_type || 'release' }}-apk
+          path: build/app/outputs/flutter-apk/app-*.apk
           retention-days: 30
       
       - name: Upload APK metadata

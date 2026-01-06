@@ -50,6 +50,9 @@ android {
 
     buildTypes {
         release {
+            // TODO: Replace with proper release signing for production
+            // For hackathon/development purposes, using debug signing
+            // See BUILD.md for instructions on setting up release signing
             signingConfig signingConfigs.debug
         }
     }
