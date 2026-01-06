@@ -1,0 +1,160 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: 'gradle'
+          
+      - name: Create Gradle properties with repository mirrors
+        run: |
+          mkdir -p ~/.gradle
+          cat > ~/.gradle/init.gradle << 'EOF'
+          allprojects {
+              buildscript {
+                  repositories {
+                      google()
+                      mavenCentral()
+                      // Add Google Maven repository mirror as fallback
+                      maven {
+                          url 'https://maven.google.com'
+                      }
+                      // Add Gradle Plugin Portal
+                      maven {
+                          url 'https://plugins.gradle.org/m2/'
+                      }
+                      // Add JCenter as additional fallback (read-only)
+                      maven {
+                        url 'https://jcenter.bintray.com/'
+                      }
+                  }
+              }
+              repositories {
+                  google()
+                  mavenCentral()
+                  // Add Google Maven repository mirror as fallback
+                  maven {
+                      url 'https://maven.google.com'
+                  }
+                  // Add Gradle Plugin Portal
+                  maven {
+                      url 'https://plugins.gradle.org/m2/'
+                  }
+                  // Add JCenter as additional fallback (read-only)
+                  maven {
+                    url 'https://jcenter.bintray.com/'
+                  }
+              }
+          }
+          EOF
+          echo "Created Gradle init script with repository mirrors"
+          cat ~/.gradle/init.gradle
+          
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+            
+      - name: Make gradlew executable
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            echo "Made gradlew executable"
+          else
+            echo "gradlew not found in repository root"
+          fi
+          
+      - name: Debug - List repository contents
+        run: |
+          echo "Repository contents:"
+          ls -la
+          echo ""
+          echo "Looking for Android/Flutter project files:"
+          find . -name "build.gradle*" -o -name "settings.gradle*" -o -name "pubspec.yaml" | head -20
+          
+      - name: Setup Flutter (if Flutter project)
+        id: flutter-setup
+        run: |
+          if [ -f "pubspec.yaml" ]; then
+            echo "Flutter project detected"
+            echo "is_flutter=true" >> $GITHUB_OUTPUT
+            git clone https://github.com/flutter/flutter.git -b stable --depth 1
+            echo "$PWD/flutter/bin" >> $GITHUB_PATH
+            flutter doctor -v
+            flutter pub get
+          else
+            echo "Not a Flutter project"
+            echo "is_flutter=false" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Build APK (Flutter)
+        if: steps.flutter-setup.outputs.is_flutter == 'true'
+        run: |
+          echo "Building Flutter APK with enhanced debugging..."
+          flutter build apk --release --verbose
+          
+      - name: Build APK (Native Android)
+        if: steps.flutter-setup.outputs.is_flutter == 'false'
+        run: |
+          echo "Building native Android APK with enhanced debugging..."
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleRelease --stacktrace --info --refresh-dependencies
+          else
+            echo "No gradlew found, cannot build"
+            exit 1
+          fi
+          
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            app/build/outputs/apk/release/*.apk
+            **/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
+          retention-days: 30
+          
+      - name: Build summary
+        if: always()
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Java Version**: Java 11 (Temurin)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository Mirrors**: Configured Google Maven, Maven Central, and fallbacks" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Type**: ${{ steps.flutter-setup.outputs.is_flutter == 'true' && 'Flutter' || 'Native Android' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ] || [ -n "$(find . -name '*.apk' -type f 2>/dev/null)" ]; then
+            echo "✅ **Status**: Build succeeded" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### APK Files Generated:" >> $GITHUB_STEP_SUMMARY
+            find . -name "*.apk" -type f -exec ls -lh {} \; | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Status**: Build failed or no APK generated" >> $GITHUB_STEP_SUMMARY
+          fi
