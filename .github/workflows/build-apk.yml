@@ -1,0 +1,81 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type (release/debug)'
+        required: false
+        default: 'release'
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.16.0'
+          channel: 'stable'
+      
+      - name: Verify Flutter installation
+        run: |
+          flutter --version
+          flutter doctor -v
+      
+      - name: Get Flutter dependencies
+        run: flutter pub get
+      
+      - name: Run Flutter analyzer
+        run: flutter analyze
+        continue-on-error: true
+      
+      - name: Build APK
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          flutter build apk --${BUILD_TYPE}
+          echo "Built APK with build type: ${BUILD_TYPE}"
+      
+      - name: Get APK info
+        run: |
+          echo "APK built successfully!"
+          ls -lh build/app/outputs/flutter-apk/
+      
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ github.event.inputs.build_type || 'release' }}-apk
+          path: build/app/outputs/flutter-apk/app-*.apk
+          retention-days: 30
+      
+      - name: Upload APK metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-metadata
+          path: build/app/outputs/flutter-apk/output-metadata.json
+          retention-days: 30
+        continue-on-error: true
