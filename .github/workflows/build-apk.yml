@@ -35,34 +35,18 @@ jobs:
                   repositories {
                       google()
                       mavenCentral()
-                      // Add Google Maven repository mirror as fallback
-                      maven {
-                          url 'https://maven.google.com'
-                      }
-                      // Add Gradle Plugin Portal
+                      // Add Gradle Plugin Portal as fallback
                       maven {
                           url 'https://plugins.gradle.org/m2/'
-                      }
-                      // Add JCenter as additional fallback (read-only)
-                      maven {
-                        url 'https://jcenter.bintray.com/'
                       }
                   }
               }
               repositories {
                   google()
                   mavenCentral()
-                  // Add Google Maven repository mirror as fallback
-                  maven {
-                      url 'https://maven.google.com'
-                  }
-                  // Add Gradle Plugin Portal
+                  // Add Gradle Plugin Portal as fallback
                   maven {
                       url 'https://plugins.gradle.org/m2/'
-                  }
-                  // Add JCenter as additional fallback (read-only)
-                  maven {
-                    url 'https://jcenter.bintray.com/'
                   }
               }
           }
